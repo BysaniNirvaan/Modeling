@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> Library Navigator - WASD Controls</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 20px;
+            border-radius: 8px;
+            z-index: 100;
+            line-height: 1.8;
+            border-left: 4px solid #00ff88;
+            max-width: 320px;
+            font-weight: 500;
+        }
+        #info h2 {
+            margin: 0 0 15px 0;
+            color: #00ff88;
+            font-size: 18px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        #info p {
+            margin: 8px 0;
+            font-size: 13px;
+        }
+        #info .key {
+            display: inline-block;
+            background: rgba(0, 255, 136, 0.2);
+            padding: 3px 8px;
+            border-radius: 4px;
+            margin: 0 4px;
+            font-family: 'Courier New', monospace;
+            color: #00ff88;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 18px;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 40px;
+            border-radius: 8px;
+            z-index: 200;
+            border: 2px solid #00ff88;
+        }
+        #loading.hidden {
+            display: none;
+        }
+        #fps {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: #00ff88;
+            font-size: 12px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+        }
+        #coords {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: #00ff88;
+            font-size: 11px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h2>📚 BHS Library Navigator</h2>
+        <p><strong>Navigation Controls:</strong></p>
+        <p><span class="key">W</span> - Move Forward</p>
+        <p><span class="key">A</span> - Move Left</p>
+        <p><span class="key">S</span> - Move Backward</p>
+        <p><span class="key">D</span> - Move Right</p>
+        <p><span class="key">SPACE</span> - Jump</p>
+        <p><span class="key">SHIFT</span> - Sprint</p>
+        <p><span class="key">Mouse</span> - Look Around</p>
+        <p style="font-size: 11px; color: #888; margin-top: 15px;">Click and drag to look around</p>
+    </div>
+    
+    <div id="fps">FPS: <span id="fps-counter">0</span></div>
+    <div id="coords">
+        <div>X: <span id="coord-x">0</span></div>
+        <div>Y: <span id="coord-y">0</span></div>
+        <div>Z: <span id="coord-z">0</span></div>
+    </div>
+    
+    <div id="loading">
+        <p>📚 Loading BHS Library...</p>
+        <p style="font-size: 12px; margin-top: 15px; color: #888;">Please wait for the model to load</p>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+        // Scene Setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x2a2a3e);
+        scene.fog = new THREE.Fog(0x2a2a3e, 500, 2000);
+
+        const camera = new THREE.PerspectiveCamera(
+            75,
+            window.innerWidth / window.innerHeight,
+            0.1,
+            10000
+        );
+        camera.position.set(0, 2.5, 5);
+
+        // Renderer with High Quality Settings
+        const renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            precision: 'highp',
+            alpha: true,
+            powerPreference: 'high-performance'
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFShadowMap;
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.8;
+        renderer.physicallyCorrectLights = true;
+        document.body.appendChild(renderer.domElement);
+
+        // Professional Lighting System - Enhanced for Visibility
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
+        scene.add(ambientLight);
+
+        const mainLight = new THREE.DirectionalLight(0xffffff, 2.5);
+        mainLight.position.set(50, 80, 50);
+        mainLight.castShadow = true;
+        mainLight.shadow.mapSize.width = 4096;
+        mainLight.shadow.mapSize.height = 4096;
+        mainLight.shadow.camera.left = -500;
+        mainLight.shadow.camera.right = 500;
+        mainLight.shadow.camera.top = 500;
+        mainLight.shadow.camera.bottom = -500;
+        mainLight.shadow.camera.near = 0.1;
+        mainLight.shadow.camera.far = 2000;
+        mainLight.shadow.bias = -0.0006;
+        mainLight.shadow.radius = 4;
+        scene.add(mainLight);
+
+        const fillLight = new THREE.DirectionalLight(0xd4e8ff, 1.2);
+        fillLight.position.set(-80, 40, -80);
+        scene.add(fillLight);
+
+        const rimLight = new THREE.DirectionalLight(0xf0f8ff, 1.0);
+        rimLight.position.set(80, 30, -100);
+        scene.add(rimLight);
+
+        // Add point lights for extra visibility
+        const pointLight1 = new THREE.PointLight(0xffffff, 1.0, 500);
+        pointLight1.position.set(50, 50, 50);
+        scene.add(pointLight1);
+
+        const pointLight2 = new THREE.PointLight(0xffffff, 0.8, 400);
+        pointLight2.position.set(-50, 40, -50);
+        scene.add(pointLight2);
+
+        // Player Controls
+        const player = {
+            position: new THREE.Vector3(0, 2.5, 5),
+            velocity: new THREE.Vector3(0, 0, 0),
+            speed: 0.2,
+            sprintSpeed: 0.35,
+            jumpForce: 0.25,
+            isGrounded: true,
+            canJump: true
+        };
+
+        const keys = {};
+        const mouseState = {
+            isDown: false,
+            x: 0,
+            y: 0,
+            deltaX: 0,
+            deltaY: 0,
+            sensitivity: 0.003
+        };
+
+        let pitch = 0;
+        let yaw = 0;
+
+        // Keyboard Events
+        window.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+            if (e.key === ' ') {
+                e.preventDefault();
+                if (player.isGrounded && player.canJump) {
+                    player.velocity.y = player.jumpForce;
+                    player.isGrounded = false;
+                    player.canJump = false;
+                }
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+            if (e.key === ' ') {
+                player.canJump = true;
+            }
+        });
+
+        // Mouse Events for Look Around
+        window.addEventListener('mousemove', (e) => {
+            if (mouseState.isDown) {
+                mouseState.deltaX = e.clientX - mouseState.x;
+                mouseState.deltaY = e.clientY - mouseState.y;
+                mouseState.x = e.clientX;
+                mouseState.y = e.clientY;
+
+                yaw -= mouseState.deltaX * mouseState.sensitivity;
+                pitch -= mouseState.deltaY * mouseState.sensitivity;
+                pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+
+                camera.rotation.order = 'YXZ';
+                camera.rotation.y = yaw;
+                camera.rotation.x = pitch;
+            }
+        });
+
+        window.addEventListener('mousedown', (e) => {
+            if (e.button === 0) {
+                mouseState.isDown = true;
+                mouseState.x = e.clientX;
+                mouseState.y = e.clientY;
+            }
+        });
+
+        window.addEventListener('mouseup', (e) => {
+            if (e.button === 0) {
+                mouseState.isDown = false;
+            }
+        });
+
+        window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // Handle Window Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Load GLB File with Better Error Handling
+        const loader = new GLTFLoader();
+        const loadingDiv = document.getElementById('loading');
+        let modelLoaded = false;
+
+        // Try multiple possible file paths
+        const possiblePaths = [
+            'library.glb',
+            './library.glb',
+            'bhs_library.glb',
+            './bhs_library.glb',
+            '../library.glb',
+            '../bhs_library.glb',
+            '../../library.glb',
+            '../lib3/bhs_library.glb',
+            'library',
+            './library',
+            '../library'
+        ];
+
+        let currentPathIndex = 0;
+
+        function attemptLoad() {
+            if (currentPathIndex >= possiblePaths.length) {
+                console.error('Failed to load from all possible paths');
+                loadingDiv.innerHTML = '<p style="color: #ff6b6b;">❌ Error Loading Model</p><p style="font-size: 12px; margin-top: 10px; color: #ff8888;">Tried all possible paths:</p>' + possiblePaths.map(p => `<p style="font-size: 10px; color: #888; margin: 2px 0;">${p}</p>`).join('') + '<p style="font-size: 10px; margin-top: 10px; color: #aaa;">Make sure the .glb file is in the same folder as this HTML file</p>';
+                return;
+            }
+
+            const filePath = possiblePaths[currentPathIndex];
+            console.log(`Attempting to load: ${filePath}`);
+            loadingDiv.innerHTML = `<p>📚 Loading BHS Library...</p><p style="font-size: 11px; margin-top: 10px; color: #888;">Attempting: ${filePath}</p>`;
+
+            loader.load(
+                filePath,
+                (gltf) => {
+                    const model = gltf.scene;
+                    modelLoaded = true;
+                    console.log('Model loaded successfully from:', filePath);
+
+                    // Apply high-quality materials to all objects with vibrant colors
+                    model.traverse((child) => {
+                        if (child.isMesh) {
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+
+                            if (child.material) {
+                                const nameLC = child.name.toLowerCase();
+                                
+                                // Define realistic color palettes for a real library
+                                const bookColors = [
+                                    // Warm browns - most common in real libraries
+                                    0x654321, 0x8b4513, 0xa0522d, 0x8b6f47, 0x7d5c3f,
+                                    0x704214, 0x6b5344, 0x5d4e37, 0x8b5a3c, 0x7a5c3a,
+                                    // Deep reds and burgundies - classic book colors
+                                    0x800000, 0x8b0000, 0xa52a2a, 0x6b2e3a, 0x8b2e2e,
+                                    0x7d3c2d, 0x6b3f2f, 0x704214,
+                                    // Dark blues and navy - sophisticated
+                                    0x1a2d4d, 0x2c3e50, 0x34495e, 0x1e3a5f, 0x2d4a6f,
+                                    // Forest greens - natural
+                                    0x1a4d2e, 0x2d5a3d, 0x3d6b4f, 0x2f5233,
+                                    // Blacks and charcoals - for variety
+                                    0x1a1a1a, 0x2d2d2d, 0x3a3a3a, 0x4a4a4a, 0x5a5a5a,
+                                    // Muted greys
+                                    0x6b6b6b, 0x696969, 0x808080,
+                                    // Creams and off-whites - light books
+                                    0xd4c5a0, 0xd9ccc1, 0xd5d0c8, 0xe8dcc4, 0xf5e6d3,
+                                ];
+                                
+                                const shelfColors = [
+                                    // Natural wood tones
+                                    0x8b6f47, 0x7d5c3f, 0x704214, 0xa0826d, 0x9b7f5c,
+                                    0x8b7355, 0x7a6a5a, 0x6b5344, 0x9a7d62, 0x8a6f55,
+                                    0x7a5f4a, 0x6a4f3a, 0xb5a085, 0xa89577
+                                ];
+                                
+                                const wallColors = [
+                                    // Soft, neutral walls typical in libraries
+                                    0xd9d5c8, 0xd5d0c8, 0xe8dcc4, 0xd4c9b8, 0xccc4b0,
+                                    0xddd9c8, 0xe0dcd5, 0xf0ede8, 0xebe3d5, 0xe5ddd0,
+                                    0xd9d5c8, 0xddd9cc, 0xe8e4d9, 0xf5f1e8
+                                ];
+                                
+                                const floorColors = [
+                                    // Realistic wood or stone floors
+                                    0x8b6f47, 0x7a6a5a, 0x9b8b6f, 0x6b5a4f, 0xa0826d,
+                                    0x8b5a3c, 0x7d5c3f, 0x6b4423, 0x78645f, 0x7a6b5f,
+                                    0x8a7a6a, 0x9a8a7a, 0x6a5a4a, 0x5a4a3a
+                                ];
+                                
+                                const furnitureColors = [
+                                    // Professional furniture woods
+                                    0x8b6f47, 0x9b8b6f, 0x7d5c3f, 0xa0826d, 0xb5a085,
+                                    0x704214, 0x6b5344, 0x8b5a3c, 0x7a5c3a, 0x9b7a5c,
+                                    0x8a6f55, 0x7a5f4a, 0xb8860b, 0xa0826d
+                                ];
+                                
+                                let materialColor = 0xcccccc;
+                                let roughnessValue = 0.6;
+                                let metallnessValue = 0.15;
+                                
+                                // Smart color assignment based on object name
+                                if (nameLC.includes('book') || nameLC.includes('spine')) {
+                                    materialColor = bookColors[Math.floor(Math.random() * bookColors.length)];
+                                    roughnessValue = 0.8; // Books are matte
+                                    metallnessValue = 0.02; // Minimal metal
+                                } else if (nameLC.includes('shelf') || nameLC.includes('bookcase') || nameLC.includes('cabinet')) {
+                                    materialColor = shelfColors[Math.floor(Math.random() * shelfColors.length)];
+                                    roughnessValue = 0.75; // Polished wood
+                                    metallnessValue = 0.05;
+                                } else if (nameLC.includes('wall') || nameLC.includes('panel') || nameLC.includes('background')) {
+                                    materialColor = wallColors[Math.floor(Math.random() * wallColors.length)];
+                                    roughnessValue = 0.8; // Wall texture
+                                    metallnessValue = 0;
+                                } else if (nameLC.includes('floor') || nameLC.includes('ground') || nameLC.includes('base')) {
+                                    materialColor = floorColors[Math.floor(Math.random() * floorColors.length)];
+                                    roughnessValue = 0.75; // Slightly worn
+                                    metallnessValue = 0;
+                                } else if (nameLC.includes('table') || nameLC.includes('desk') || nameLC.includes('chair') || nameLC.includes('furniture')) {
+                                    materialColor = furnitureColors[Math.floor(Math.random() * furnitureColors.length)];
+                                    roughnessValue = 0.72; // Polished furniture
+                                    metallnessValue = 0.08;
+                                } else if (nameLC.includes('door') || nameLC.includes('window') || nameLC.includes('glass')) {
+                                    materialColor = 0xa8d8e8; // Cool glass
+                                    roughnessValue = 0.15;
+                                    metallnessValue = 0.25;
+                                } else if (nameLC.includes('light') || nameLC.includes('lamp') || nameLC.includes('fixture')) {
+                                    materialColor = 0xffffff;
+                                    roughnessValue = 0.25;
+                                    metallnessValue = 0.75;
+                                } else {
+                                    // Random color from all palettes for other objects
+                                    const allColors = [...bookColors, ...shelfColors, ...wallColors, ...floorColors];
+                                    materialColor = allColors[Math.floor(Math.random() * allColors.length)];
+                                }
+                                
+                                // Subtle brightening for visibility (not too much)
+                                let colorObj = new THREE.Color(materialColor);
+                                colorObj.multiplyScalar(1.1);
+
+                                // Create realistic material
+                                const newMaterial = new THREE.MeshStandardMaterial({
+                                    color: colorObj,
+                                    roughness: roughnessValue,
+                                    metalness: metallnessValue,
+                                    envMapIntensity: 0.6,
+                                    emissive: new THREE.Color(0x000000),
+                                    emissiveIntensity: 0.0,
+                                    side: THREE.DoubleSide
+                                });
+                                child.material = newMaterial;
+                            }
+                        }
+                    });
+
+                    scene.add(model);
+                    loadingDiv.classList.add('hidden');
+                    console.log('BHS Library rendered successfully!');
+                },
+                (progress) => {
+                    const percentComplete = (progress.loaded / progress.total * 100);
+                    console.log(`Loading progress (${filePath}):`, percentComplete.toFixed(2) + '%');
+                    loadingDiv.innerHTML = `<p>📚 Loading BHS Library...</p><p style="font-size: 12px; margin-top: 10px; color: #00ff88;">${percentComplete.toFixed(0)}% Complete</p>`;
+                },
+                (error) => {
+                    console.warn(`Failed to load from ${filePath}:`, error);
+                    currentPathIndex++;
+                    attemptLoad();
+                }
+            );
+        }
+
+        attemptLoad();
+
+        // Player Update Function
+        function updatePlayer() {
+            const currentSpeed = keys['shift'] ? player.sprintSpeed : player.speed;
+
+            const forward = new THREE.Vector3();
+            camera.getWorldDirection(forward);
+            forward.y = 0;
+            forward.normalize();
+
+            const right = new THREE.Vector3();
+            right.crossVectors(camera.up, forward);
+            right.normalize();
+
+            const movement = new THREE.Vector3();
+            if (keys['w']) movement.addScaledVector(forward, currentSpeed);
+            if (keys['s']) movement.addScaledVector(forward, -currentSpeed);
+            if (keys['a']) movement.addScaledVector(right, -currentSpeed);
+            if (keys['d']) movement.addScaledVector(right, currentSpeed);
+
+            player.position.add(movement);
+
+            // Gravity and ground check
+            if (player.position.y > 2.5) {
+                player.velocity.y -= 0.008;
+                player.isGrounded = false;
+            } else {
+                player.position.y = 2.5;
+                player.velocity.y = 0;
+                player.isGrounded = true;
+            }
+
+            camera.position.copy(player.position);
+            
+            // Update coordinates display
+            document.getElementById('coord-x').textContent = player.position.x.toFixed(2);
+            document.getElementById('coord-y').textContent = player.position.y.toFixed(2);
+            document.getElementById('coord-z').textContent = player.position.z.toFixed(2);
+        }
+
+        // FPS Counter
+        let frameCount = 0;
+        let lastTime = Date.now();
+        function updateFPS() {
+            frameCount++;
+            const currentTime = Date.now();
+            if (currentTime - lastTime >= 1000) {
+                document.getElementById('fps-counter').textContent = frameCount;
+                frameCount = 0;
+                lastTime = currentTime;
+            }
+        }
+
+        // Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            updatePlayer();
+            updateFPS();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
